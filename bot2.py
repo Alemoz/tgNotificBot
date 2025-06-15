@@ -10,7 +10,7 @@ from utils.scheduler import schedule_event_notifications
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID")
+GROUP_CHAT_ID = os.getenv("CHANNEL_ID")
 
 async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
