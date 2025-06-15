@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tgnotificbot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot2.py
+    autoDeploy: true
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: ADMIN_USER_IDS
+        sync: false
