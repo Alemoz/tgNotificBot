@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS events (
 conn.commit()
 
 def add_event(event_type, days, date, time, description):
+    print(f"Проверка ивента: type={event_type}, days={days}, date={date}, time={time}")
     cursor.execute("INSERT INTO events (type, days, date, time, description) VALUES (?, ?, ?, ?, ?)",
                    (event_type, days, date, time, description))
     conn.commit()

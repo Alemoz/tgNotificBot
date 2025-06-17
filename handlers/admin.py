@@ -28,12 +28,14 @@ WEEKDAY_SHORT_RU = {
 EVENT_TYPE_RU = {
     "weekly_once": "1 раз в неделю",
     "weekly_multiple": "несколько дней в неделю",
-    "once": "одноразовый"
+    "once": "одноразовый",
+    "weekday": "будничный"
 }
 def get_event_type_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Еженедельные ивенты (несколько дней)", callback_data="weekly_multiple")],
-        [InlineKeyboardButton(text="Еженедельный ивент (1 день в неделю)", callback_data="weekly_once")],
+        [InlineKeyboardButton(text="Еженедельный ивент (1 рза в неделю)", callback_data="weekly_once")],
+        #[InlineKeyboardButton(text="Будничный ивент", callback_data="weekdays")],
         [InlineKeyboardButton(text="Одноразовый ивент", callback_data="once")]
     ])
 
@@ -41,6 +43,7 @@ def get_days_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Пн, Ср, Пт", callback_data="mon,wed,fri")],
         [InlineKeyboardButton(text="Вт, Чт", callback_data="tue,thu")],
+        [InlineKeyboardButton(text="Будни", callback_data="mon,tue,wed,thu,fri")],
         [InlineKeyboardButton(text="Все дни недели", callback_data="mon,tue,wed,thu,fri,sat,sun")]
     ])
 
@@ -92,7 +95,7 @@ async def create_event(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("Выберите тип ивента:", reply_markup=get_event_type_kb())
 
 # Шаг 1: Выбор типа ивента
-@router.callback_query(F.data.in_({"weekly_multiple", "weekly_once", "once"}))
+@router.callback_query(F.data.in_({"weekly_multiple", "weekly_once", "once", "weekdays"}))
 async def choose_type(callback: CallbackQuery, state: FSMContext):
     await state.update_data(type=callback.data)
     if callback.data == "weekly_multiple":
@@ -104,8 +107,13 @@ async def choose_type(callback: CallbackQuery, state: FSMContext):
     elif callback.data == "once":
         await callback.message.edit_text("Введите дату ивента (в формате ГГГГ-ММ-ДД):")
         await state.set_state(EventCreation.entering_date)
+    elif callback.data == "weekdays":
+        # Устанавливаем фиксированные будние дни
+        await state.update_data(days="mon,tue,wed,thu,fri")
+        time_msg = await callback.message.answer("Введите время начала ивента (формат HH:MM):")
+        await state.update_data(time_prompt_id=time_msg.message_id)
+        await state.set_state(EventCreation.entering_time)
 
-# Шаг 2 для weekly_multiple — выбираем дни (как раньше)
 @router.callback_query(EventCreation.choosing_day_once)
 async def choose_day_once(callback: CallbackQuery, state: FSMContext):
     await state.update_data(day=callback.data)
@@ -116,6 +124,19 @@ async def choose_day_once(callback: CallbackQuery, state: FSMContext):
     time_msg = await callback.message.answer("Введите время начала ивента (формат HH:MM):")
     await state.update_data(time_prompt_id=time_msg.message_id)
 
+    await state.set_state(EventCreation.entering_time)
+
+@router.callback_query(EventCreation.choosing_days)
+async def choose_multiple_days(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(days=callback.data)
+
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
+    time_msg = await callback.message.answer("Введите время начала ивента (формат HH:MM):")
+    await state.update_data(time_prompt_id=time_msg.message_id)
     await state.set_state(EventCreation.entering_time)
 
 @router.message(EventCreation.entering_time)
@@ -142,30 +163,37 @@ async def enter_time(message: Message, state: FSMContext):
 
 @router.message(EventCreation.entering_description)
 async def enter_description(message: Message, state: FSMContext):
-    data = await state.get_data()
     await state.update_data(description=message.text)
+    data = await state.get_data()
 
-    # Удаляем сообщение пользователя
+    # Удаление сообщений
     try:
         await message.delete()
     except Exception:
         pass
 
-    # Удаляем сообщение "Введите описание..."
     if "description_prompt_id" in data:
         try:
             await message.bot.delete_message(chat_id=message.chat.id, message_id=data["description_prompt_id"])
         except Exception:
             pass
+    if data.get("type") == "weekly_once" and not data.get("days"):
+        data["days"] = data.get("day")  # day='mon', например
+    # Сохранение события в БД
+    add_event(
+        event_type=data.get("type"),
+        days=data.get("days"),
+        date=data.get("date"),
+        time=data.get("time"),
+        description=data.get("description")
+    )
 
-    # Здесь дальше — логика сохранения ивента, возврат к админке и т.п.
     msg = await message.answer("✅ Ивент сохранён.")
     await sleep(5)
     try:
-        msg.delete()
+        await msg.delete()
     except Exception:
         pass
-    # ...можно добавить возврат к админ панели и т.д.
     await state.clear()
 
 @router.callback_query(F.data == "list_events")

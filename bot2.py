@@ -10,7 +10,7 @@ from utils.scheduler import schedule_event_notifications
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_CHAT_ID = os.getenv("CHANNEL_ID")
+GROUP_CHAT_ID = int(os.getenv("CHANNEL_ID"))
 
 async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
@@ -18,7 +18,7 @@ async def main():
 
     dp.include_router(admin.router)
 
-    schedule_event_notifications(bot, GROUP_CHAT_ID)
+    asyncio.create_task(schedule_event_notifications(bot, GROUP_CHAT_ID))
 
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
