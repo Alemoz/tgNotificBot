@@ -36,7 +36,7 @@ async def schedule_event_notifications(bot, group_id):
                     if weekday in (days or "") and time_ == current_time:
                         await bot.send_message(group_id, f"🔂 <b>Еженедельный разовый ивент:</b> {desc}\n🕒 {time_}")
                         # Тут можно обновить дату на +7 дней, чтобы не спамил
-                elif type_ == "weekdays":
+                elif type_ == "weekly_multiple":
                     if weekday in (days or "") and time_ == current_time:
                         await bot.send_message(group_id, f"🔂 <b>Будничный ивент:</b> {desc}\n🕒 {time_}")
                         # Тут можно обновить дату на +7 дней, чтобы не спамил
