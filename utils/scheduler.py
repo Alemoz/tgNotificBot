@@ -1,17 +1,24 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from database import get_all_events
 import logging
 
-async def schedule_event_notifications(bot, group_id):
-    while True:
-        now = datetime.now()
-        today = now.strftime("%Y-%m-%d")
-        weekday = now.strftime("%a").lower()
-        current_time = now.strftime("%H:%M")
-        timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Просто логируем текущее время в консоль
+async def schedule_event_notifications(bot, group_id):
+    # Смещение для UTC+3
+    tz_offset = timedelta(hours=3)
+
+    while True:
+        # Текущее время на сервере в UTC
+        now_utc = datetime.now(timezone.utc)
+        # Преобразуем в UTC+3
+        now_local = now_utc.astimezone(timezone(tz_offset))
+
+        today = now_local.strftime("%Y-%m-%d")
+        weekday = now_local.strftime("%a").lower()
+        current_time = now_local.strftime("%H:%M")
+        timestamp = now_local.strftime("%Y-%m-%d %H:%M:%S")
+
         print(f"⏰ [{timestamp}] Бот работает")
 
         try:

@@ -17,6 +17,8 @@ GROUP_CHAT_ID = int(os.getenv("CHANNEL_ID", "0"))
 
 async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+    if not BOT_TOKEN or GROUP_CHAT_ID == 0:
+        raise RuntimeError("❌ BOT_TOKEN или CHANNEL_ID не установлены!")
     dp = Dispatcher(storage=MemoryStorage())
 
     dp.include_router(admin.router)

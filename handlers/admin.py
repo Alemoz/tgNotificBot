@@ -9,6 +9,7 @@ from states import EventCreation
 from database import add_event, get_all_events, delete_event
 from asyncio import sleep
 from dotenv import load_dotenv
+from datetime import datetime, timezone, timedelta
 
 router = Router()
 
@@ -81,11 +82,28 @@ async def admin_panel(message: Message, state: FSMContext):
         return
 
     await state.clear()
+
+    # Текущее время сервера (UTC)
+    utc_now = datetime.now(timezone.utc)
+
+    # Время по GMT+3
+    gmt3_now = utc_now.astimezone(timezone(timedelta(hours=3)))
+
+    # Форматируем строки
+    server_time_str = utc_now.strftime("%Y-%m-%d %H:%M:%S UTC")
+    local_time_str = gmt3_now.strftime("%Y-%m-%d %H:%M:%S GMT+3")
+
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Создать ивент", callback_data="create_event")],
         [InlineKeyboardButton(text="Список ивентов", callback_data="list_events")]
     ])
-    await message.answer("Панель администратора", reply_markup=kb)
+
+    await message.answer(
+        f"📋 <b>Панель администратора</b>\n\n"
+        f"🕒 <b>Время сервера (UTC):</b> {server_time_str}\n"
+        f"🕒 <b>Местное время (GMT+3):</b> {local_time_str}",
+        reply_markup=kb
+    )
 
 
 @router.callback_query(F.data == "create_event")

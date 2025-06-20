@@ -1,26 +1,34 @@
-# Используем официальный Python с поддержкой Rust
+# Базовый образ Python
 FROM python:3.11-slim
 
-# Установим зависимости для сборки
-RUN apt-get update && apt-get install -y \
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     git \
     libssl-dev \
     pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/*
 
-# Установка Rust
+# Установка Rust (используется для сборки некоторых Python-зависимостей)
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:$PATH"
 
-# Копируем проект
+# Создание рабочей директории
 WORKDIR /app
+
+# Копируем только зависимости сначала (для лучшего кэширования)
+COPY requirements.txt .
+
+# Установка Python-зависимостей
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir -r requirements.txt
+
+# Копируем остальной код
 COPY . .
 
-# Установка зависимостей
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+# Принудительный небуферизированный режим для логов
+ENV PYTHONUNBUFFERED=1
 
 # Запуск бота
-CMD ["python", "bot2.py"]
+CMD ["python", "-u", "bot2.py"]
