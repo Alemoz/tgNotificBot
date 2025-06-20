@@ -1,7 +1,6 @@
 import asyncio
 import os
 
-from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
@@ -14,27 +13,9 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_CHAT_ID = int(os.getenv("CHANNEL_ID", "0"))
-PORT = int(os.getenv("PORT", 10000))  # Render по умолчанию ждёт этот порт
-
-
-async def handle(request):
-    return web.Response(text="✅ Bot is running")
-
-
-async def start_http_server():
-    app = web.Application()
-    app.router.add_get("/", handle)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", PORT)
-    await site.start()
 
 
 async def main():
-    # Стартуем фоновый HTTP-сервер
-    asyncio.create_task(start_http_server())
-
-    # Стартуем бота
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     dp = Dispatcher(storage=MemoryStorage())
 
