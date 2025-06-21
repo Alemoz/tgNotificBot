@@ -1,7 +1,7 @@
 import os
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
@@ -32,13 +32,17 @@ EVENT_TYPE_RU = {
     "once": "одноразовый",
     "weekday": "будничный"
 }
+DAY_ORDER = {'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7}
+
+
 def get_event_type_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Еженедельные ивенты (несколько дней)", callback_data="weekly_multiple")],
         [InlineKeyboardButton(text="Еженедельный ивент (1 рза в неделю)", callback_data="weekly_once")],
-        #[InlineKeyboardButton(text="Будничный ивент", callback_data="weekdays")],
+        # [InlineKeyboardButton(text="Будничный ивент", callback_data="weekdays")],
         [InlineKeyboardButton(text="Одноразовый ивент", callback_data="once")]
     ])
+
 
 def get_days_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -47,6 +51,7 @@ def get_days_kb():
         [InlineKeyboardButton(text="Будни", callback_data="mon,tue,wed,thu,fri")],
         [InlineKeyboardButton(text="Все дни недели", callback_data="mon,tue,wed,thu,fri,sat,sun")]
     ])
+
 
 def get_weekday_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -59,13 +64,16 @@ def get_weekday_kb():
         [InlineKeyboardButton(text="Воскресенье", callback_data="sun")],
     ])
 
+
 def admin_only(handler):
     async def wrapper(message: Message, state: FSMContext, *args, **kwargs):
         if message.from_user.id not in ADMIN_IDS:
             await message.answer("❌ У вас нет прав для использования этой команды.")
             return
         return await handler(message, state, *args, **kwargs)
+
     return wrapper
+
 
 def convert_days_to_ru(days_str: str) -> str:
     if not days_str:
@@ -106,11 +114,25 @@ async def admin_panel(message: Message, state: FSMContext):
     )
 
 
+@router.message(Command("getdb"))
+async def send_db_file(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ У вас нет доступа.")
+        return
+
+    try:
+        file = FSInputFile("events.db")
+        await message.answer_document(file, caption="📦 Файл базы данных")
+    except Exception as e:
+        await message.answer(f"⚠️ Ошибка при отправке файла: {e}")
+
+
 @router.callback_query(F.data == "create_event")
 async def create_event(callback: CallbackQuery, state: FSMContext):
     await state.set_state(EventCreation.choosing_type)
     await callback.answer()
     await callback.message.answer("Выберите тип ивента:", reply_markup=get_event_type_kb())
+
 
 # Шаг 1: Выбор типа ивента
 @router.callback_query(F.data.in_({"weekly_multiple", "weekly_once", "once", "weekdays"}))
@@ -132,6 +154,7 @@ async def choose_type(callback: CallbackQuery, state: FSMContext):
         await state.update_data(time_prompt_id=time_msg.message_id)
         await state.set_state(EventCreation.entering_time)
 
+
 @router.callback_query(EventCreation.choosing_day_once)
 async def choose_day_once(callback: CallbackQuery, state: FSMContext):
     await state.update_data(day=callback.data)
@@ -143,6 +166,7 @@ async def choose_day_once(callback: CallbackQuery, state: FSMContext):
     await state.update_data(time_prompt_id=time_msg.message_id)
 
     await state.set_state(EventCreation.entering_time)
+
 
 @router.callback_query(EventCreation.choosing_days)
 async def choose_multiple_days(callback: CallbackQuery, state: FSMContext):
@@ -156,6 +180,7 @@ async def choose_multiple_days(callback: CallbackQuery, state: FSMContext):
     time_msg = await callback.message.answer("Введите время начала ивента (формат HH:MM):")
     await state.update_data(time_prompt_id=time_msg.message_id)
     await state.set_state(EventCreation.entering_time)
+
 
 @router.message(EventCreation.entering_time)
 async def enter_time(message: Message, state: FSMContext):
@@ -178,6 +203,7 @@ async def enter_time(message: Message, state: FSMContext):
     await state.update_data(description_prompt_id=next_msg.message_id)
 
     await state.set_state(EventCreation.entering_description)
+
 
 @router.message(EventCreation.entering_description)
 async def enter_description(message: Message, state: FSMContext):
@@ -214,6 +240,7 @@ async def enter_description(message: Message, state: FSMContext):
         pass
     await state.clear()
 
+
 @router.callback_query(F.data == "list_events")
 async def list_events(callback: CallbackQuery):
     events = get_all_events()
@@ -223,22 +250,62 @@ async def list_events(callback: CallbackQuery):
         ))
         return
 
-    text = "📋 <b>Ивенты:</b>\n\n"
-    for e in events:
-        event_id = e[0]
-        event_type = e[1]
-        days = e[2]  # например, "mon,wed,fri"
-        date = e[3]
-        time = e[4]
-        description = e[5]
-        ru_type = EVENT_TYPE_RU.get(event_type, event_type)
-        days_display = convert_days_to_ru(days) if days else date
+    # Порядок и отображение дней недели
+    weekday_order = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+    weekday_names = {
+        'mon': 'Понедельник',
+        'tue': 'Вторник',
+        'wed': 'Среда',
+        'thu': 'Четверг',
+        'fri': 'Пятница',
+        'sat': 'Суббота',
+        'sun': 'Воскресенье',
+    }
 
-        text += (
-            f"🆔 <b>{event_id}</b> | <i>{ru_type}</i>\n"
-            f"📅 <b>{days_display}</b> ⏰ <b>{time}</b>\n"
-            f"📝 <i>{description}</i>\n\n"
-        )
+    grouped = {day: [] for day in weekday_order}
+    once_events = []
+
+    for e in events:
+        event_id, event_type, days, date, time_, description = e
+
+        if event_type == "once" and date:
+            once_events.append((event_id, event_type, date, time_, description))
+        elif days:
+            for day in days.split(','):
+                if day in grouped:
+                    grouped[day].append((event_id, event_type, day, time_, description))
+
+    text = "📋 <b>Ивенты по дням недели:</b>\n\n"
+
+    # Вывод по дням недели с сортировкой по времени
+    for day in weekday_order:
+        day_events = grouped[day]
+        if day_events:
+            # Сортировка по времени
+            sorted_events = sorted(day_events, key=lambda x: x[3])  # x[3] — это time_
+            text += f"<b>📅 {weekday_names[day]}:</b>\n"
+            for e in sorted_events:
+                event_id, event_type, _, time_, description = e
+                ru_type = EVENT_TYPE_RU.get(event_type, event_type)
+                text += (
+                    f"🆔 <b>{event_id}</b> | <i>{ru_type}</i>\n"
+                    f"⏰ <b>{time_}</b>\n"
+                    f"📝 <i>{description}</i>\n\n"
+                )
+
+    # Одноразовые события отсортированы по дате и времени
+    if once_events:
+        once_events.sort(key=lambda x: (x[2], x[3]))  # x[2] = date, x[3] = time
+        text += "<b>📌 Одноразовые ивенты:</b>\n"
+        for e in once_events:
+            event_id, event_type, date, time_, description = e
+            ru_type = EVENT_TYPE_RU.get(event_type, event_type)
+            text += (
+                f"🆔 <b>{event_id}</b> | <i>{ru_type}</i>\n"
+                f"📆 <b>{date}</b> ⏰ <b>{time_}</b>\n"
+                f"📝 <i>{description}</i>\n\n"
+            )
+
     text += "Чтобы удалить: /delete ID"
     await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="Скрыть", callback_data="hide_list")]]
@@ -252,6 +319,7 @@ async def hide_list(callback: CallbackQuery):
         [InlineKeyboardButton(text="Список ивентов", callback_data="list_events")]
     ])
     await callback.message.edit_text("Панель администратора", reply_markup=kb)
+
 
 @router.message(Command("delete"))
 async def delete_by_id(message: Message):
