@@ -33,7 +33,28 @@ EVENT_TYPE_RU = {
     "weekday": "будничный"
 }
 DAY_ORDER = {'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7}
+DAY_GROUPS = {
+    "Пн, Ср, Пт": {"mon", "wed", "fri"},
+    "Вт, Чт": {"tue", "thu"},
+    "Будни": {"mon", "tue", "wed", "thu", "fri"},
+    "Все дни недели": {"mon", "tue", "wed", "thu", "fri", "sat", "sun"},
+}
 
+def classify_days(days_str):
+    if not days_str:
+        return None
+
+    days = set(days_str.split(","))
+    for name, group_days in DAY_GROUPS.items():
+        if days == group_days:
+            return name
+    return "Прочее"
+
+def time_key(event):
+    try:
+        return datetime.strptime(event[4], "%H:%M")
+    except:
+        return datetime.strptime("00:00", "%H:%M")
 
 def get_event_type_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -250,61 +271,45 @@ async def list_events(callback: CallbackQuery):
         ))
         return
 
-    # Порядок и отображение дней недели
-    weekday_order = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-    weekday_names = {
-        'mon': 'Понедельник',
-        'tue': 'Вторник',
-        'wed': 'Среда',
-        'thu': 'Четверг',
-        'fri': 'Пятница',
-        'sat': 'Суббота',
-        'sun': 'Воскресенье',
+    # Группировка
+    grouped = {
+        "Пн, Ср, Пт": [],
+        "Вт, Чт": [],
+        "Будни": [],
+        "Все дни недели": [],
+        "Прочее": []
     }
 
-    grouped = {day: [] for day in weekday_order}
-    once_events = []
-
     for e in events:
-        event_id, event_type, days, date, time_, description = e
+        _, type_, days, date, time, description = e
+        group_name = classify_days(days)
+        grouped[group_name].append(e)
 
-        if event_type == "once" and date:
-            once_events.append((event_id, event_type, date, time_, description))
-        elif days:
-            for day in days.split(','):
-                if day in grouped:
-                    grouped[day].append((event_id, event_type, day, time_, description))
+    # Формируем текст
+    text = "📋 <b>Ивенты:</b>\n\n"
+    for group_name in ["Пн, Ср, Пт", "Вт, Чт", "Будни", "Все дни недели", "Прочее"]:
+        events_in_group = sorted(grouped[group_name], key=time_key)
+        if not events_in_group:
+            continue
+        text += f"🔹 <b>{group_name}</b>\n"
+        for e in events_in_group:
+            event_id = e[0]
+            event_type = e[1]
+            days = e[2]
+            date = e[3]
+            time = e[4]
+            description = e[5]
 
-    text = "📋 <b>Ивенты по дням недели:</b>\n\n"
-
-    # Вывод по дням недели с сортировкой по времени
-    for day in weekday_order:
-        day_events = grouped[day]
-        if day_events:
-            # Сортировка по времени
-            sorted_events = sorted(day_events, key=lambda x: x[3])  # x[3] — это time_
-            text += f"<b>📅 {weekday_names[day]}:</b>\n"
-            for e in sorted_events:
-                event_id, event_type, _, time_, description = e
-                ru_type = EVENT_TYPE_RU.get(event_type, event_type)
-                text += (
-                    f"🆔 <b>{event_id}</b> | <i>{ru_type}</i>\n"
-                    f"⏰ <b>{time_}</b>\n"
-                    f"📝 <i>{description}</i>\n\n"
-                )
-
-    # Одноразовые события отсортированы по дате и времени
-    if once_events:
-        once_events.sort(key=lambda x: (x[2], x[3]))  # x[2] = date, x[3] = time
-        text += "<b>📌 Одноразовые ивенты:</b>\n"
-        for e in once_events:
-            event_id, event_type, date, time_, description = e
             ru_type = EVENT_TYPE_RU.get(event_type, event_type)
+            days_display = convert_days_to_ru(days) if days else date
+
             text += (
+                "━━━━━━━━━━━━━━\n"
                 f"🆔 <b>{event_id}</b> | <i>{ru_type}</i>\n"
-                f"📆 <b>{date}</b> ⏰ <b>{time_}</b>\n"
-                f"📝 <i>{description}</i>\n\n"
+                f"📅 <b>{days_display}</b> ⏰ <b>{time}</b>\n"
+                f"📝 <i>{description}</i>\n"
             )
+        text += "━━━━━━━━━━━━━━\n\n"
 
     text += "Чтобы удалить: /delete ID"
     await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(
