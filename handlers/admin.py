@@ -37,6 +37,8 @@ DAY_GROUPS = {
     "Пн, Ср, Пт": {"mon", "wed", "fri"},
     "Вт, Чт": {"tue", "thu"},
     "Будни": {"mon", "tue", "wed", "thu", "fri"},
+    "Сб": {"sat"},
+    "Вс": {"sun"},
     "Все дни недели": {"mon", "tue", "wed", "thu", "fri", "sat", "sun"},
 }
 
@@ -44,7 +46,7 @@ def classify_days(days_str):
     if not days_str:
         return None
 
-    days = set(days_str.split(","))
+    days = set(d.strip().lower() for d in days_str.split(",") if d.strip())
     for name, group_days in DAY_GROUPS.items():
         if days == group_days:
             return name
@@ -276,6 +278,8 @@ async def list_events(callback: CallbackQuery):
         "Пн, Ср, Пт": [],
         "Вт, Чт": [],
         "Будни": [],
+        "Сб": [],
+        "Вс": [],
         "Все дни недели": [],
         "Прочее": []
     }
@@ -287,7 +291,7 @@ async def list_events(callback: CallbackQuery):
 
     # Формируем текст
     text = "📋 <b>Ивенты:</b>\n\n"
-    for group_name in ["Пн, Ср, Пт", "Вт, Чт", "Будни", "Все дни недели", "Прочее"]:
+    for group_name in ["Пн, Ср, Пт", "Вт, Чт", "Будни", "Сб", "Вс", "Все дни недели", "Прочее"]:
         events_in_group = sorted(grouped[group_name], key=time_key)
         if not events_in_group:
             continue
