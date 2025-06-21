@@ -3,6 +3,14 @@ from datetime import datetime, timezone, timedelta
 from database import get_all_events
 import logging
 
+# ⏳ Удаление сообщения через указанное время
+async def delete_after_delay(bot, chat_id, message_id, delay=300):
+    await asyncio.sleep(delay)
+    try:
+        await bot.delete_message(chat_id, message_id)
+        print(f"🗑️ Сообщение {message_id} удалено")
+    except Exception as e:
+        logging.warning(f"⚠️ Не удалось удалить сообщение {message_id}: {e}")
 
 async def schedule_event_notifications(bot, group_id):
     # Смещение для UTC+3
@@ -57,8 +65,9 @@ async def schedule_event_notifications(bot, group_id):
 
                 if send:
                     print(f"📨 [{timestamp}] Отправка уведомления: {message}")
-                    await bot.send_message(group_id, message)
-
+                    msg = await bot.send_message(group_id, message)
+                    # ⏱️ Удаление через 5 минут
+                    asyncio.create_task(delete_after_delay(bot, group_id, msg.message_id, delay=600))
             except Exception as e:
                 logging.error(f"❌ Ошибка при обработке ивента {event_id}: {e}")
 
